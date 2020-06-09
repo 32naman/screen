@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { TreeMirror } from "../tree_mirror";
 
-const PORT = 8000;
+const PORT = 7000;
 const url = new URL(document.URL);
 const search_params = url.searchParams;
 const hash = search_params.get("hash");

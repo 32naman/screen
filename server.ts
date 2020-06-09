@@ -2,11 +2,12 @@ import express from "express";
 import ws from "ws";
 import cors from "cors";
 import { Socket } from "net";
+var WebSocket = require("ws");
 const url = require("url");
 const wss = new ws.Server({ noServer: true });
 const PORT = 7000;
 const CLIENT_PORT = 8000;
-const relayURL = `http://localhost:${CLIENT_PORT}/screenSharingAgent`;
+const relayURL = `http://localhost:${CLIENT_PORT}/screenShareAgent`;
 
 const app = express();
 const server = app.listen(PORT, () =>
@@ -56,11 +57,13 @@ function onScreenShareAgent(ws: ws, hash: string | null) {
   console.log("agent opened. now at " + agents[hash].length);
   // ws.send(JSON.stringify(messages[hash]));
   if (relays[hash] === undefined) {
-    let relaySocket = new WebSocket(relayURL);
-
+    console.log("Reached 1");
+    let relaySocket = new WebSocket(relayURL + `?hash=${hash}`);
+    console.log("Reached 2");
     relaySocket.onmessage = (event) => {
+      console.log("Message Recieved");
       agents[hash].forEach((agent: ws) => {
-        agent.send(JSON.stringify(event.data));
+        agent.send(event.data);
       });
     };
 

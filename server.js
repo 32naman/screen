@@ -6,11 +6,12 @@ exports.__esModule = true;
 var express_1 = __importDefault(require("express"));
 var ws_1 = __importDefault(require("ws"));
 var cors_1 = __importDefault(require("cors"));
+var WebSocket = require("ws");
 var url = require("url");
 var wss = new ws_1["default"].Server({ noServer: true });
 var PORT = 7000;
 var CLIENT_PORT = 8000;
-var relayURL = "http://localhost:" + CLIENT_PORT + "/screenSharingAgent";
+var relayURL = "http://localhost:" + CLIENT_PORT + "/screenShareAgent";
 var app = express_1["default"]();
 var server = app.listen(PORT, function () {
     return console.log("Server running on Port " + PORT);
@@ -43,10 +44,13 @@ function onScreenShareAgent(ws, hash) {
     console.log("agent opened. now at " + agents[hash].length);
     // ws.send(JSON.stringify(messages[hash]));
     if (relays[hash] === undefined) {
-        var relaySocket = new WebSocket(relayURL);
+        console.log("Reached 1");
+        var relaySocket = new WebSocket(relayURL + ("?hash=" + hash));
+        console.log("Reached 2");
         relaySocket.onmessage = function (event) {
+            console.log("Message Recieved");
             agents[hash].forEach(function (agent) {
-                agent.send(JSON.stringify(event.data));
+                agent.send(event.data);
             });
         };
         relays[hash] = relaySocket;
