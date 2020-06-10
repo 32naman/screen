@@ -24,6 +24,7 @@ interface Relays {
 
 // var agents: Agents = {};
 // var relays: Relays = {};
+var msgs: string[] = [];
 var relaySocket;
 
 // Middleware
@@ -57,31 +58,40 @@ function onScreenShareAgent(ws: ws, hash: string | null) {
   // agents[hash].push(ws);
   // console.log("agent opened. now at"+agents[hash].length);
   console.log("agent opened");
-  // ws.send(JSON.stringify(messages[hash]));
-  // if (relays[hash] === undefined) {
-  // console.log("Reached 1");
   if (relaySocket === undefined) {
     relaySocket = new WebSocket(relayURL + `?hash=${hash}`);
+
+    relaySocket.onopen = () => {
+      msgs.forEach((msg) => {
+        relaySocket.send(msg);
+      });
+    };
+
     relaySocket.onmessage = (event) => {
       console.log("Message Recieved");
       ws.send(event.data);
     };
-  }
-  // console.log("Reached 2");
-  // agents[hash].forEach((agent: ws) => {
-  //   agent.send(event.data);
-  // });
-  // };
+    // ws.send(JSON.stringify(messages[hash]));
+    // if (relays[hash] === undefined) {
+    // console.log("Reached 1");
 
-  ws.onmessage = function (event) {
-    let msg = JSON.parse(event.data.toString());
-    console.log(msg);
-    if (msg.callUser !== undefined) {
-      relaySocket.send(
-        JSON.stringify({ hey: { signal: msg.callUser.signalData } })
-      );
-    } else relaySocket.send(event.data);
-  };
+    // console.log("Reached 2");
+    // agents[hash].forEach((agent: ws) => {
+    //   agent.send(event.data);
+    // });
+    // };
+
+    ws.onmessage = function (event) {
+      let msg = JSON.parse(event.data.toString());
+      console.log(msg);
+
+      if (relaySocket.readyState !== 1) {
+        msgs.push(event.data.toString());
+      } else {
+        relaySocket.send(event.data);
+      }
+    };
+  }
 
   // relays[hash] = relaySocket;
 

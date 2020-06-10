@@ -18,6 +18,7 @@ var server = app.listen(PORT, function () {
 });
 // var agents: Agents = {};
 // var relays: Relays = {};
+var msgs = [];
 var relaySocket;
 // Middleware
 app.use(function (req, res, next) {
@@ -44,30 +45,36 @@ function onScreenShareAgent(ws, hash) {
     // agents[hash].push(ws);
     // console.log("agent opened. now at"+agents[hash].length);
     console.log("agent opened");
-    // ws.send(JSON.stringify(messages[hash]));
-    // if (relays[hash] === undefined) {
-    // console.log("Reached 1");
     if (relaySocket === undefined) {
         relaySocket = new WebSocket(relayURL + ("?hash=" + hash));
+        relaySocket.onopen = function () {
+            msgs.forEach(function (msg) {
+                relaySocket.send(msg);
+            });
+        };
         relaySocket.onmessage = function (event) {
             console.log("Message Recieved");
             ws.send(event.data);
         };
+        // ws.send(JSON.stringify(messages[hash]));
+        // if (relays[hash] === undefined) {
+        // console.log("Reached 1");
+        // console.log("Reached 2");
+        // agents[hash].forEach((agent: ws) => {
+        //   agent.send(event.data);
+        // });
+        // };
+        ws.onmessage = function (event) {
+            var msg = JSON.parse(event.data.toString());
+            console.log(msg);
+            if (relaySocket.readyState !== 1) {
+                msgs.push(event.data.toString());
+            }
+            else {
+                relaySocket.send(event.data);
+            }
+        };
     }
-    // console.log("Reached 2");
-    // agents[hash].forEach((agent: ws) => {
-    //   agent.send(event.data);
-    // });
-    // };
-    ws.onmessage = function (event) {
-        var msg = JSON.parse(event.data.toString());
-        console.log(msg);
-        if (msg.callUser !== undefined) {
-            relaySocket.send(JSON.stringify({ hey: { signal: msg.callUser.signalData } }));
-        }
-        else
-            relaySocket.send(event.data);
-    };
     // relays[hash] = relaySocket;
     ws.onclose = function () {
         // let index = agents[hash].indexOf(ws);

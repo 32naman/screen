@@ -1,6 +1,5 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { TreeMirror } from "../tree_mirror";
-import Peer from "simple-peer";
 
 const PORT = 7000;
 const url = new URL(document.URL);
@@ -28,14 +27,13 @@ interface Child {
 }
 
 function ScreenShareAgent() {
-  const [socket, setSocket] = useState(new WebSocket(socketURL));
-
+  const socket = useRef<WebSocket | null>(null);
   const peer = useRef(
-    new Peer({
-      initiator: true,
-      trickle: false,
+    new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     })
   );
+  const dataChannel = useRef<RTCDataChannel | null>(null);
 
   function clearPage() {
     while (document.firstChild) {
@@ -112,64 +110,84 @@ function ScreenShareAgent() {
     }
   };
 
-  socket.onmessage = function (event) {
-    let msg = JSON.parse(event.data);
-    console.log(msg);
-    if (msg.callAccepted !== undefined) {
-      peer.current.signal(msg.callAccepted.signal);
-    } else {
-      peer.current.signal(msg);
-    }
-  };
+  useEffect(() => {
+    socket.current = new WebSocket(socketURL);
+    if (socket.current === null) return;
 
-  socket.onopen = () => {
-    peer.current.on("signal", (data) => {
-      let msg = {
-        callUser: {
-          signalData: data,
-        },
-      };
+    socket.current.onmessage = function (event) {
+      let msg = JSON.parse(event.data);
       console.log(msg);
-      socket.send(JSON.stringify(data));
-      // peer.current.signal(data);
-    });
-
-    peer.current.on("connect", () => {
-      const rootDiv = document.getElementById("root");
-      const endButton = document.createElement("button");
-      endButton.addEventListener("onClick", () => {
-        peer.current.send("terminate");
-        end(peer.current);
-      });
-      endButton.innerHTML = "END CALL";
-      if (rootDiv != null) rootDiv.appendChild(endButton);
-    });
-
-    peer.current.on("data", (data) => {
-      let msg = JSON.parse(data);
-      if (msg === "terminate") end(peer.current);
-      else if (msg instanceof Array) {
-        msg.forEach(function (subMessage) {
-          console.log(subMessage);
-          handleMessage(JSON.parse(subMessage));
-        });
-      } else {
-        console.log(msg);
-        handleMessage(msg);
+      if (msg.type === "answer") {
+        console.log("Processing Answer");
+        peer.current.setRemoteDescription(new RTCSessionDescription(msg.value));
+      } else if (msg.type === "candidate") {
+        console.log("Processing ICE");
+        peer.current.addIceCandidate(new RTCIceCandidate(msg.value));
       }
-    });
-  };
+    };
 
-  function end(peer: Peer.Instance | null) {
-    if (peer != null) {
-      peer.send("terminate");
-      peer.destroy();
-    }
-  }
+    socket.current.onopen = () => {
+      peer.current.onicecandidate = (event) => {
+        if (!event || !event.candidate) {
+          console.log(event.candidate);
+          return;
+        }
+        socket.current!.send(
+          JSON.stringify({
+            type: "candidate",
+            value: event.candidate,
+          })
+        );
+      };
 
-  socket.onclose = function () {
-    setSocket(new WebSocket(socketURL));
-  };
+      peer.current.onconnectionstatechange = (event) => {
+        if (peer.current.connectionState === "connected") {
+          console.log("Peer Connected");
+        }
+      };
+
+      dataChannel.current = peer.current.createDataChannel("data");
+
+      dataChannel.current.onmessage = function (e) {
+        console.log("Message Received");
+        let msg = JSON.parse(e.data);
+        if (msg instanceof Array) {
+          msg.forEach(function (subMessage) {
+            console.log(subMessage);
+            handleMessage(JSON.parse(subMessage));
+          });
+        } else {
+          console.log(msg);
+          handleMessage(msg);
+        }
+      };
+      dataChannel.current.onopen = function () {
+        console.log("------ DATACHANNEL OPENED ------");
+      };
+      dataChannel.current.onclose = function () {
+        console.log("------- DC closed! -------");
+      };
+
+      let sdpConstraints = {
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false,
+      };
+      peer.current.createOffer(sdpConstraints).then((descrip) => {
+        console.log("Sending Offer");
+        peer.current.setLocalDescription(descrip);
+        socket.current!.send(
+          JSON.stringify({
+            type: "offer",
+            value: descrip,
+          })
+        );
+      }, null);
+    };
+
+    socket.current.onclose = function () {
+      console.log("Closing Socket");
+    };
+  }, []);
 
   return <h1>Empty</h1>;
 }
