@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { TreeMirror } from "../tree_mirror";
+import Peer from "simple-peer";
 
 const PORT = 7000;
 const url = new URL(document.URL);
@@ -104,9 +105,43 @@ function ScreenShareAgent() {
     }
   };
 
+  const peer = new Peer({
+    initiator: true,
+    trickle: false,
+  });
+
+  peer.on("signal", (data) => {
+    let msg = {
+      callUser: {
+        signalData: data,
+      },
+    };
+    console.log(msg);
+    socket.send(JSON.stringify(msg));
+  });
+
   socket.onmessage = function (event) {
     let msg = JSON.parse(event.data);
-    if (msg instanceof Array) {
+    if (msg.callAccepted !== undefined) {
+      peer.signal(msg.callAccepted.signal);
+    }
+  };
+
+  peer.on("connect", () => {
+    const rootDiv = document.getElementById("root");
+    const endButton = document.createElement("button");
+    endButton.addEventListener("onClick", () => {
+      peer.send("terminate");
+      end(peer);
+    });
+    endButton.innerHTML = "END CALL";
+    if (rootDiv != null) rootDiv.appendChild(endButton);
+  });
+
+  peer.on("data", (data) => {
+    let msg = JSON.parse(data);
+    if (msg === "terminate") end(peer);
+    else if (msg instanceof Array) {
       msg.forEach(function (subMessage) {
         console.log(subMessage);
         handleMessage(JSON.parse(subMessage));
@@ -115,7 +150,14 @@ function ScreenShareAgent() {
       console.log(msg);
       handleMessage(msg);
     }
-  };
+  });
+
+  function end(peer: Peer.Instance | null) {
+    if (peer != null) {
+      peer.send("terminate");
+      peer.destroy();
+    }
+  }
 
   socket.onclose = function () {
     setSocket(new WebSocket(socketURL));

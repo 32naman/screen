@@ -16,8 +16,8 @@ var app = express_1["default"]();
 var server = app.listen(PORT, function () {
     return console.log("Server running on Port " + PORT);
 });
-var agents = {};
-var relays = {};
+// var agents: Agents = {};
+// var relays: Relays = {};
 // Middleware
 app.use(function (req, res, next) {
     console.log(req.method + " " + req.url);
@@ -37,30 +37,40 @@ server.on("upgrade", function upgrade(request, socket, head) {
     }
 });
 function onScreenShareAgent(ws, hash) {
-    if (agents[hash] === undefined) {
-        agents[hash] = [];
-    }
-    agents[hash].push(ws);
-    console.log("agent opened. now at " + agents[hash].length);
+    // if (agents[hash] === undefined) {
+    //   agents[hash] = [];
+    // }
+    // agents[hash].push(ws);
+    // console.log("agent opened. now at"+agents[hash].length);
+    console.log("agent opened");
     // ws.send(JSON.stringify(messages[hash]));
-    if (relays[hash] === undefined) {
-        console.log("Reached 1");
-        var relaySocket = new WebSocket(relayURL + ("?hash=" + hash));
-        console.log("Reached 2");
-        relaySocket.onmessage = function (event) {
-            console.log("Message Recieved");
-            agents[hash].forEach(function (agent) {
-                agent.send(event.data);
-            });
-        };
-        relays[hash] = relaySocket;
-    }
-    ws.onclose = function () {
-        var index = agents[hash].indexOf(ws);
-        if (agents[hash].length === 1)
-            agents[hash] = [];
+    // if (relays[hash] === undefined) {
+    // console.log("Reached 1");
+    var relaySocket = new WebSocket(relayURL + ("?hash=" + hash));
+    // console.log("Reached 2");
+    relaySocket.onmessage = function (event) {
+        console.log("Message Recieved");
+        ws.send(event.data);
+    };
+    // agents[hash].forEach((agent: ws) => {
+    //   agent.send(event.data);
+    // });
+    // };
+    ws.onmessage = function (event) {
+        console.log("message Sent");
+        var msg = JSON.parse(event.data.toString());
+        if (msg.callUser !== undefined) {
+            relaySocket.send(JSON.stringify({ hey: { signal: msg.callUser.signalData } }));
+        }
         else
-            agents[hash].splice(index, 1);
-        console.log("agent closed. now at " + agents[hash].length);
+            relaySocket.send(event.data);
+    };
+    // relays[hash] = relaySocket;
+    ws.onclose = function () {
+        // let index = agents[hash].indexOf(ws);
+        // if (agents[hash].length === 1) agents[hash] = [];
+        // else agents[hash].splice(index, 1);
+        // console.log("agent closed. now at " + agents[hash].length);
+        console.log("agent closed");
     };
 }
