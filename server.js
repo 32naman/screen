@@ -18,6 +18,7 @@ var server = app.listen(PORT, function () {
 });
 // var agents: Agents = {};
 // var relays: Relays = {};
+var relaySocket;
 // Middleware
 app.use(function (req, res, next) {
     console.log(req.method + " " + req.url);
@@ -46,19 +47,21 @@ function onScreenShareAgent(ws, hash) {
     // ws.send(JSON.stringify(messages[hash]));
     // if (relays[hash] === undefined) {
     // console.log("Reached 1");
-    var relaySocket = new WebSocket(relayURL + ("?hash=" + hash));
+    if (relaySocket === undefined) {
+        relaySocket = new WebSocket(relayURL + ("?hash=" + hash));
+        relaySocket.onmessage = function (event) {
+            console.log("Message Recieved");
+            ws.send(event.data);
+        };
+    }
     // console.log("Reached 2");
-    relaySocket.onmessage = function (event) {
-        console.log("Message Recieved");
-        ws.send(event.data);
-    };
     // agents[hash].forEach((agent: ws) => {
     //   agent.send(event.data);
     // });
     // };
     ws.onmessage = function (event) {
-        console.log("message Sent");
         var msg = JSON.parse(event.data.toString());
+        console.log(msg);
         if (msg.callUser !== undefined) {
             relaySocket.send(JSON.stringify({ hey: { signal: msg.callUser.signalData } }));
         }

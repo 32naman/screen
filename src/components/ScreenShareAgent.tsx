@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { TreeMirror } from "../tree_mirror";
 import Peer from "simple-peer";
 
@@ -29,6 +29,13 @@ interface Child {
 
 function ScreenShareAgent() {
   const [socket, setSocket] = useState(new WebSocket(socketURL));
+
+  const peer = useRef(
+    new Peer({
+      initiator: true,
+      trickle: false,
+    })
+  );
 
   function clearPage() {
     while (document.firstChild) {
@@ -105,52 +112,53 @@ function ScreenShareAgent() {
     }
   };
 
-  const peer = new Peer({
-    initiator: true,
-    trickle: false,
-  });
-
-  peer.on("signal", (data) => {
-    let msg = {
-      callUser: {
-        signalData: data,
-      },
-    };
-    console.log(msg);
-    socket.send(JSON.stringify(msg));
-  });
-
   socket.onmessage = function (event) {
     let msg = JSON.parse(event.data);
+    console.log(msg);
     if (msg.callAccepted !== undefined) {
-      peer.signal(msg.callAccepted.signal);
+      peer.current.signal(msg.callAccepted.signal);
+    } else {
+      peer.current.signal(msg);
     }
   };
 
-  peer.on("connect", () => {
-    const rootDiv = document.getElementById("root");
-    const endButton = document.createElement("button");
-    endButton.addEventListener("onClick", () => {
-      peer.send("terminate");
-      end(peer);
-    });
-    endButton.innerHTML = "END CALL";
-    if (rootDiv != null) rootDiv.appendChild(endButton);
-  });
-
-  peer.on("data", (data) => {
-    let msg = JSON.parse(data);
-    if (msg === "terminate") end(peer);
-    else if (msg instanceof Array) {
-      msg.forEach(function (subMessage) {
-        console.log(subMessage);
-        handleMessage(JSON.parse(subMessage));
-      });
-    } else {
+  socket.onopen = () => {
+    peer.current.on("signal", (data) => {
+      let msg = {
+        callUser: {
+          signalData: data,
+        },
+      };
       console.log(msg);
-      handleMessage(msg);
-    }
-  });
+      socket.send(JSON.stringify(data));
+      // peer.current.signal(data);
+    });
+
+    peer.current.on("connect", () => {
+      const rootDiv = document.getElementById("root");
+      const endButton = document.createElement("button");
+      endButton.addEventListener("onClick", () => {
+        peer.current.send("terminate");
+        end(peer.current);
+      });
+      endButton.innerHTML = "END CALL";
+      if (rootDiv != null) rootDiv.appendChild(endButton);
+    });
+
+    peer.current.on("data", (data) => {
+      let msg = JSON.parse(data);
+      if (msg === "terminate") end(peer.current);
+      else if (msg instanceof Array) {
+        msg.forEach(function (subMessage) {
+          console.log(subMessage);
+          handleMessage(JSON.parse(subMessage));
+        });
+      } else {
+        console.log(msg);
+        handleMessage(msg);
+      }
+    });
+  };
 
   function end(peer: Peer.Instance | null) {
     if (peer != null) {

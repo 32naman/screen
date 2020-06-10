@@ -24,6 +24,7 @@ interface Relays {
 
 // var agents: Agents = {};
 // var relays: Relays = {};
+var relaySocket;
 
 // Middleware
 app.use((req, res, next) => {
@@ -59,20 +60,22 @@ function onScreenShareAgent(ws: ws, hash: string | null) {
   // ws.send(JSON.stringify(messages[hash]));
   // if (relays[hash] === undefined) {
   // console.log("Reached 1");
-  let relaySocket = new WebSocket(relayURL + `?hash=${hash}`);
+  if (relaySocket === undefined) {
+    relaySocket = new WebSocket(relayURL + `?hash=${hash}`);
+    relaySocket.onmessage = (event) => {
+      console.log("Message Recieved");
+      ws.send(event.data);
+    };
+  }
   // console.log("Reached 2");
-  relaySocket.onmessage = (event) => {
-    console.log("Message Recieved");
-    ws.send(event.data);
-  };
   // agents[hash].forEach((agent: ws) => {
   //   agent.send(event.data);
   // });
   // };
 
   ws.onmessage = function (event) {
-    console.log("message Sent");
     let msg = JSON.parse(event.data.toString());
+    console.log(msg);
     if (msg.callUser !== undefined) {
       relaySocket.send(
         JSON.stringify({ hey: { signal: msg.callUser.signalData } })
