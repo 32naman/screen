@@ -2,12 +2,9 @@ import express from "express";
 import ws from "ws";
 import cors from "cors";
 import { Socket } from "net";
-var WebSocket = require("ws");
 const url = require("url");
 const wss = new ws.Server({ noServer: true });
 const PORT = 7000;
-const CLIENT_PORT = 8000;
-const relayURL = `http://localhost:${CLIENT_PORT}/screenShareAgent`;
 
 const app = express();
 const server = app.listen(PORT, () =>
@@ -18,14 +15,11 @@ interface Agents {
   [Key: string]: ws[];
 }
 
-interface Relays {
-  [Key: string]: WebSocket;
+interface Client {
+  [Key: string]: ws | undefined;
 }
-
-// var agents: Agents = {};
-// var relays: Relays = {};
-var msgs: string[] = [];
-var relaySocket;
+var agents: Agents = {};
+var clientShare: Client = {};
 
 // Middleware
 app.use((req, res, next) => {
@@ -43,63 +37,60 @@ server.on("upgrade", function upgrade(
 ) {
   console.log("Web Socket");
   let reqURL = url.parse(request.url, true);
-  if (reqURL.pathname === "/screenShareAgent") {
+  console.log(reqURL);
+  if (reqURL.pathname === "/screenShareClient") {
     const hash = url.parse(request.url, true).query.hash;
-    wss.handleUpgrade(request, socket, head, function (ws: ws) {
+    wss.handleUpgrade(request, socket, head, function (ws) {
+      onScreenShareClient(ws, hash);
+    });
+  } else if (reqURL.pathname === "/screenShareAgent") {
+    const hash = url.parse(request.url, true).query.hash;
+    wss.handleUpgrade(request, socket, head, function (ws) {
       onScreenShareAgent(ws, hash);
     });
   }
 });
 
-function onScreenShareAgent(ws: ws, hash: string | null) {
-  // if (agents[hash] === undefined) {
-  //   agents[hash] = [];
-  // }
-  // agents[hash].push(ws);
-  // console.log("agent opened. now at"+agents[hash].length);
-  console.log("agent opened");
-  if (relaySocket === undefined) {
-    relaySocket = new WebSocket(relayURL + `?hash=${hash}`);
-
-    relaySocket.onopen = () => {
-      msgs.forEach((msg) => {
-        relaySocket.send(msg);
-      });
-    };
-
-    relaySocket.onmessage = (event) => {
-      console.log("Message Recieved");
-      ws.send(event.data);
-    };
-    // ws.send(JSON.stringify(messages[hash]));
-    // if (relays[hash] === undefined) {
-    // console.log("Reached 1");
-
-    // console.log("Reached 2");
-    // agents[hash].forEach((agent: ws) => {
-    //   agent.send(event.data);
-    // });
-    // };
-
-    ws.onmessage = function (event) {
-      let msg = JSON.parse(event.data.toString());
-      console.log(msg);
-
-      if (relaySocket.readyState !== 1) {
-        msgs.push(event.data.toString());
-      } else {
-        relaySocket.send(event.data);
-      }
-    };
+function onScreenShareAgent(ws: ws, hash: string) {
+  if (agents[hash] === undefined) {
+    agents[hash] = [];
   }
+  agents[hash].push(ws);
+  console.log("Reached screenShareAgent");
+  // ws.send(JSON.stringify(messages[hash]));
 
-  // relays[hash] = relaySocket;
+  ws.onmessage = (event) => {
+    console.log(JSON.parse(event.data.toString()));
+    clientShare[hash]!.send(event.data);
+  };
 
   ws.onclose = function () {
-    // let index = agents[hash].indexOf(ws);
-    // if (agents[hash].length === 1) agents[hash] = [];
-    // else agents[hash].splice(index, 1);
-    // console.log("agent closed. now at " + agents[hash].length);
-    console.log("agent closed");
+    let index = agents[hash].indexOf(ws);
+    if (agents[hash].length === 1) agents[hash] = [];
+    else agents[hash].splice(index, 1);
+    console.log("agent closed. now at " + agents[hash].length);
   };
+}
+
+function onScreenShareClient(ws: ws, hash: string) {
+  console.log("reached onScreenShareClient");
+  clientShare[hash] = ws;
+  agents[hash] = [];
+
+  ws.onmessage = function (event) {
+    console.log("Message Received at ScreenShareClient");
+    agents[hash].forEach(function (agent: ws) {
+      agent.send(event.data);
+    });
+  };
+
+  ws.onclose = function () {
+    console.log("client closing, clearing messages");
+    agents[hash].forEach(function (socket: ws) {
+      socket.close();
+    });
+    clientShare[hash] = undefined;
+    //   clientShare[hash] = undefined;
+  };
+  console.log("client open completed.");
 }

@@ -28,7 +28,7 @@ interface Child {
 
 function ScreenShareAgent() {
   const socket = useRef<WebSocket | null>(null);
-  const peer = useRef(
+  const peer = useRef<RTCPeerConnection>(
     new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     })
@@ -165,6 +165,7 @@ function ScreenShareAgent() {
         console.log("------ DATACHANNEL OPENED ------");
       };
       dataChannel.current.onclose = function () {
+        clearPage();
         console.log("------- DC closed! -------");
       };
 
@@ -185,6 +186,7 @@ function ScreenShareAgent() {
     };
 
     socket.current.onclose = function () {
+      peer.current.close();
       console.log("Closing Socket");
     };
   }, []);
